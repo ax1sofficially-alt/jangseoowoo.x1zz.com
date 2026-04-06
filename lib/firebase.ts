@@ -1,9 +1,3 @@
-// ============================================================
-// src/lib/firebase.ts
-// Client SDK (Auth/실시간) + Admin-less 서버 fetch 전략
-// Server Component에서는 REST API로 직접 fetch → Admin SDK 없이도 동작
-// ============================================================
-
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getFirestore,
@@ -13,44 +7,76 @@ import {
   orderBy,
   limit,
   getDocs,
-  doc,
-  getDoc,
   type Firestore,
+  Timestamp, // 추가
 } from 'firebase/firestore';
-import type { Post, PostCategory, FirebaseTimestamp } from '@/types/post';
+import type { Post, PostCategory } from '@/types/post';
 import { COLLECTIONS } from '@/types/post';
 
 const firebaseConfig = {
-  apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-  authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-  projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-  storageBucket:     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
-  appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+  apiKey:             process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain:         process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId:          process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket:      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId:  process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId:              process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
-// ── 싱글턴: Next.js Hot Reload 시 중복 초기화 방지
-let app: FirebaseApp;
-let db: Firestore;
+// Singleton 인스턴스 관리
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
 
-function getFirebaseInstances() {
-  if (!app) {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    db = getFirestore(app);
-  }
-  return { app, db };
+/**
+ * 🔥 직렬화 헬퍼 함수
+ * Server -> Client 전달 시 Plain Object여야 하므로 
+ * Timestamp 객체를 primitive type(number)으로 변환합니다.
+ */
+
+
+const serializeDoc = (d: any): Post => {
+  const data = d.data();
+
+  // 안전한 날짜 변환 헬퍼
+  const toMs = (date: any): number => {
+    if (!date) return Date.now();
+    
+    // 1. 이미 숫자(ms)인 경우
+    if (typeof date === 'number') return date;
+    
+    // 2. Firebase Timestamp 객체인 경우 (seconds 속성 존재 확인)
+    if (typeof date === 'object' && 'seconds' in date) {
+      return date.seconds * 1000;
+    }
+    
+    // 3. JS Date 객체인 경우
+    if (date instanceof Date) return date.getTime();
+    
+    return Date.now();
+  };
+
+  return {
+    ...data,
+    id: d.id,
+    createdAt: toMs(data.createdAt),
+    updatedAt: toMs(data.updatedAt),
+    // 만약 payload 내부에도 날짜가 있다면 여기서 처리하거나 
+    // 혹은 payload는 그대로 두고 렌더링 시점에 처리합니다.
+  } as Post;
+};
+
+/**
+ * 타임스탬프(number)를 ISO string으로 변환
+ * BentoGrid.tsx의 fmtDate 내부에서 사용됩니다.
+ */
+export function toISOString(timestamp: number | string | Date): string {
+  if (typeof timestamp === 'number') return new Date(timestamp).toISOString();
+  if (timestamp instanceof Date) return timestamp.toISOString();
+  return String(timestamp);
 }
 
-// ── 헬퍼: Firestore Timestamp → ISO string
-export function toISOString(ts: FirebaseTimestamp): string {
-  return new Date(ts.seconds * 1000).toISOString();
-}
+// ── 데이터 Fetch 로직 ──
 
-// ── Featured 포스트 fetch (메인 2x2 카드용)
-// Server Component에서 await로 호출
 export async function getFeaturedPosts(count = 2): Promise<Post[]> {
-  const { db } = getFirebaseInstances();
-
   const q = query(
     collection(db, COLLECTIONS.POSTS),
     where('status', '==', 'published'),
@@ -58,18 +84,11 @@ export async function getFeaturedPosts(count = 2): Promise<Post[]> {
     orderBy('createdAt', 'desc'),
     limit(count)
   );
-
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));
+  return snap.docs.map(serializeDoc);
 }
 
-// ── 카테고리별 최신 포스트 fetch (Bento 하단 카드용)
-export async function getPostsByCategory(
-  category: PostCategory,
-  count = 3
-): Promise<Post[]> {
-  const { db } = getFirebaseInstances();
-
+export async function getPostsByCategory(category: PostCategory, count = 3): Promise<Post[]> {
   const q = query(
     collection(db, COLLECTIONS.POSTS),
     where('status', '==', 'published'),
@@ -77,31 +96,14 @@ export async function getPostsByCategory(
     orderBy('createdAt', 'desc'),
     limit(count)
   );
-
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));
+  return snap.docs.map(serializeDoc);
 }
 
-// ── slug로 단일 포스트 fetch (Post Detail Page용)
-export async function getPostBySlug(slug: string): Promise<Post | null> {
-  const { db } = getFirebaseInstances();
-
-  const q = query(
-    collection(db, COLLECTIONS.POSTS),
-    where('slug', '==', slug),
-    where('status', '==', 'published'),
-    limit(1)
-  );
-
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  return { id: d.id, ...d.data() } as Post;
-}
-
-// ── 모든 카테고리 병렬 fetch (메인 페이지 최적화)
 export async function getAllCategoryPosts() {
   const categories: PostCategory[] = ['dev', 'physics', 'math', 'life'];
+  
+  // 병렬 처리를 통해 로딩 속도 최적화
   const [featured, ...categoryResults] = await Promise.all([
     getFeaturedPosts(2),
     ...categories.map(cat => getPostsByCategory(cat, 3)),
@@ -115,3 +117,5 @@ export async function getAllCategoryPosts() {
     life:    categoryResults[3],
   };
 }
+
+export { db };

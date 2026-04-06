@@ -1,246 +1,355 @@
 'use client';
 
-// ============================================================
-// src/components/BentoGrid.tsx
-// Framer Motion 기반 벤토 그리드 — Client Component
-// 실제 데이터(Post[])를 props로 받아 렌더링
-// ============================================================
-
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import {
+  Terminal, Atom, Sigma, Coffee,
+  ArrowUpRight, Clock, BookOpen, TrendingUp, Zap,
+} from 'lucide-react';
 import type { Post, PostCategory } from '@/types/post';
 import { toISOString } from '@/lib/firebase';
 
-// ── 카테고리 메타 맵 ─────────────────────────────────────
-const CATEGORY_META: Record<PostCategory, {
-  label: string;
-  icon: string;
-  color: string;
-  glow: string;
-  bgAccent: string;
-}> = {
-  dev: {
-    label:    'Dev',
-    icon:     '⌨',
-    color:    'text-[#7ee787]',
-    glow:     'glow-dev',
-    bgAccent: 'rgba(126, 231, 135, 0.06)',
-  },
-  physics: {
-    label:    'Physics',
-    icon:     '⚛',
-    color:    'text-[#79c0ff]',
-    glow:     'glow-physics',
-    bgAccent: 'rgba(121, 192, 255, 0.06)',
-  },
-  math: {
-    label:    'Math',
-    icon:     '∑',
-    color:    'text-[#d2a8ff]',
-    glow:     'glow-math',
-    bgAccent: 'rgba(210, 168, 255, 0.06)',
-  },
-  life: {
-    label:    'Life',
-    icon:     '◎',
-    color:    'text-[#ffa657]',
-    glow:     'glow-life',
-    bgAccent: 'rgba(255, 166, 87, 0.06)',
-  },
-};
+// ─────────────────────────────────────────────────────────────
+// 카테고리 메타 — 카테고리마다 독립 색상이지만 채도는 낮게 유지
+// ─────────────────────────────────────────────────────────────
+const CAT = {
+  dev:     { label: 'Development', short: 'DEV', Icon: Terminal,  accent: '#34d399', glow: 'rgba(52,211,153,0.06)'  },
+  physics: { label: 'Physics',     short: 'PHY', Icon: Atom,      accent: '#60a5fa', glow: 'rgba(96,165,250,0.06)'  },
+  math:    { label: 'Mathematics', short: 'MTH', Icon: Sigma,     accent: '#a78bfa', glow: 'rgba(167,139,250,0.06)' },
+  life:    { label: 'Daily Log',   short: 'LOG', Icon: Coffee,    accent: '#fb923c', glow: 'rgba(251,146,60,0.06)'  },
+} satisfies Record<PostCategory, {
+  label: string; short: string;
+  Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  accent: string; glow: string;
+}>;
 
-// ── 애니메이션 variants ──────────────────────────────────
-const containerVariants = {
+// ─────────────────────────────────────────────────────────────
+// Framer Motion — grid stagger + tile reveal
+// ─────────────────────────────────────────────────────────────
+const gridV = {
   hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.07 },
+  show:   { transition: { staggerChildren: 0.055, delayChildren: 0.05 } },
+};
+
+const tileV = {
+  hidden: { opacity: 0, y: 14, filter: 'blur(5px)' },
+  show:   {
+    opacity: 1, y: 0, filter: 'blur(0px)',
+    transition: { duration: 0.52, ease: [0.22, 1, 0.36, 1] as [number,number,number,number] },
   },
 };
 
-const cardVariants = {
-  hidden:  { opacity: 0, y: 20, scale: 0.97 },
-  visible: {
-    opacity: 1, y: 0, scale: 1,
-    transition: { duration: 0.45, ease: [0.23, 1, 0.32, 1] as [number, number, number, number] },
-  },
-};
+// ─────────────────────────────────────────────────────────────
+// 공용 카드 클래스 — Jet Black 위 극도로 얇은 glass layer
+// ─────────────────────────────────────────────────────────────
+const CARD =
+  'group relative flex flex-col overflow-hidden rounded-2xl ' +
+  'border border-white/[0.07] bg-white/[0.025] backdrop-blur-md ' +
+  'transition-all duration-300 ease-out ' +
+  'hover:border-white/[0.13] hover:bg-white/[0.04] hover:-translate-y-[2px] ' +
+  'hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)]';
 
-// ── Featured Card (2×2) ──────────────────────────────────
-function FeaturedCard({ post, index }: { post: Post; index: number }) {
-  const meta = CATEGORY_META[post.category];
-  const date = new Date(toISOString(post.createdAt)).toLocaleDateString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+// 날짜 포맷 헬퍼
+function fmtDate(ts: Post['createdAt'], opts: Intl.DateTimeFormatOptions) {
+  return new Date(toISOString(ts)).toLocaleDateString('ko-KR', opts);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 카테고리 뱃지
+// ─────────────────────────────────────────────────────────────
+function Badge({ cat }: { cat: PostCategory }) {
+  const { Icon, short, accent } = CAT[cat];
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-[0.14em]"
+      style={{ color: accent, background: `${accent}16`, border: `1px solid ${accent}26` }}
+    >
+      <Icon size={8} strokeWidth={2.5} />
+      {short}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// HERO CARD — col-span-2 row-span-2
+// ─────────────────────────────────────────────────────────────
+function HeroCard({ post }: { post: Post }) {
+  const { accent, glow } = CAT[post.category];
+  const date = fmtDate(post.createdAt, { year: 'numeric', month: 'short', day: 'numeric' });
 
   return (
-    <motion.div variants={cardVariants} className="col-span-2 row-span-2">
-      <Link
-        href={`/posts/${post.slug}`}
-        className="glass glass-hover glow-dev group relative flex h-full min-h-[320px] flex-col justify-between overflow-hidden p-6"
-        style={{ background: `linear-gradient(135deg, var(--glass-bg) 0%, ${meta.bgAccent} 100%)` }}
-      >
-        {/* 배경 번호 워터마크 */}
-        <span
-          className="font-display pointer-events-none absolute -right-4 -top-6 select-none text-[120px] font-bold leading-none opacity-[0.04]"
+    <motion.div variants={tileV} className="col-span-2 row-span-2">
+      <Link href={`/posts/${post.slug}`} className={`${CARD} h-full p-7`}>
+
+        {/* 우상단 radial glow */}
+        <div
           aria-hidden
+          className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full"
+          style={{ background: `radial-gradient(circle, ${accent}20 0%, transparent 70%)` }}
+        />
+
+        {/* 배경 워터마크 숫자 */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -bottom-4 -right-1 select-none font-mono text-[100px] font-black leading-none tracking-tighter text-white/[0.022]"
         >
-          {String(index + 1).padStart(2, '0')}
+          01
         </span>
 
         {/* 상단 메타 */}
         <div className="flex items-center justify-between">
-          <span className={`font-mono text-xs font-semibold tracking-widest uppercase ${meta.color}`}>
-            {meta.icon} &nbsp;{meta.label}
+          <Badge cat={post.category} />
+          <span className="flex items-center gap-1 font-mono text-[9px] text-zinc-700">
+            <Zap size={8} strokeWidth={2.5} style={{ color: accent }} />
+            FEATURED
           </span>
-          <span className="font-mono text-xs text-[var(--color-text-muted)]">Featured</span>
         </div>
 
-        {/* 본문 */}
-        <div className="mt-auto space-y-3">
-          <h2 className="font-display text-2xl font-bold leading-tight text-[var(--color-text-primary)] transition-colors group-hover:text-[var(--color-accent)]">
+        {/* 제목 + 본문 */}
+        <div className="mt-auto space-y-3 pt-6">
+          <h2 className="text-[22px] font-semibold leading-snug tracking-[-0.025em] text-white/90 transition-colors duration-200 group-hover:text-white">
             {post.title}
           </h2>
-          <p className="line-clamp-2 text-sm text-[var(--color-text-secondary)]">
+          <p className="line-clamp-3 text-[13px] leading-relaxed text-zinc-500">
             {post.excerpt}
           </p>
-          <div className="flex items-center gap-3 pt-1">
-            <time className="font-mono text-xs text-[var(--color-text-muted)]">{date}</time>
-            <span className="text-[var(--color-text-muted)]">·</span>
-            <span className="font-mono text-xs text-[var(--color-text-muted)]">{post.readingTimeMin}min</span>
+
+          {/* 하단 메타 바 */}
+          <div className="flex items-center justify-between pt-3">
+            <div className="flex items-center gap-3">
+              <time className="flex items-center gap-1 font-mono text-[10px] text-zinc-600">
+                <Clock size={9} strokeWidth={2} />
+                {date}
+              </time>
+              <span className="font-mono text-[10px] text-zinc-600">
+                {post.readingTimeMin} min read
+              </span>
+            </div>
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-all duration-200 group-hover:opacity-100"
+              style={{ background: `${accent}18`, color: accent }}
+            >
+              <ArrowUpRight size={12} strokeWidth={2.5} />
+            </span>
           </div>
         </div>
 
-        {/* 화살표 */}
-        <span className="absolute bottom-5 right-5 translate-x-1 text-[var(--color-text-muted)] transition-all group-hover:translate-x-0 group-hover:text-[var(--color-accent)]">
-          →
-        </span>
+        {/* 하단 accent underline — 호버 시 좌→우 슬라이드 */}
+        <div
+          className="absolute bottom-0 left-0 h-[1.5px] w-0 transition-all duration-500 ease-out group-hover:w-full"
+          style={{ background: `linear-gradient(90deg, ${accent}80, transparent)` }}
+        />
       </Link>
     </motion.div>
   );
 }
 
-// ── Category Card (1×1 or 1×2) ───────────────────────────
-function CategoryCard({
-  category,
-  posts,
-  span = 1,
+// ─────────────────────────────────────────────────────────────
+// STAT CARD — col-span-1 (숫자 중심 미니 카드)
+// ─────────────────────────────────────────────────────────────
+function StatCard({
+  value, label, Icon, accent,
 }: {
-  category: PostCategory;
-  posts: Post[];
-  span?: 1 | 2;
+  value: string | number;
+  label: string;
+  Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  accent: string;
 }) {
-  const meta = CATEGORY_META[category];
-
   return (
-    <motion.div variants={cardVariants} className={span === 2 ? 'col-span-2' : 'col-span-1'}>
-      <div
-        className={`glass glass-hover ${meta.glow} group flex h-full flex-col p-5`}
-        style={{ background: `linear-gradient(145deg, var(--glass-bg) 0%, ${meta.bgAccent} 100%)` }}
-      >
-        {/* 헤더 */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`text-xl ${meta.color}`}>{meta.icon}</span>
-            <span className={`font-display text-sm font-bold uppercase tracking-wider ${meta.color}`}>
-              {meta.label}
-            </span>
-          </div>
-          <Link
-            href={`/category/${category}`}
-            className="font-mono text-xs text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
-          >
-            all →
-          </Link>
+    <motion.div variants={tileV} className="col-span-1">
+      <div className={`${CARD} h-full justify-between p-5`}>
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{ background: `${accent}14`, color: accent }}
+        >
+          <Icon size={14} strokeWidth={2} />
         </div>
-
-        {/* 포스트 리스트 */}
-        <ul className="space-y-3">
-          {posts.slice(0, span === 2 ? 3 : 2).map((post) => (
-            <li key={post.id}>
-              <Link
-                href={`/posts/${post.slug}`}
-                className="group/item flex flex-col gap-0.5"
-              >
-                <span className="line-clamp-1 text-sm font-medium text-[var(--color-text-primary)] transition-colors group-hover/item:text-[var(--color-accent)]">
-                  {post.title}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-[var(--color-text-muted)]">
-                    {new Date(toISOString(post.createdAt)).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                  </span>
-                  <span className="font-mono text-xs text-[var(--color-text-muted)]">
-                    {post.readingTimeMin}min
-                  </span>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-
-        {/* 빈 상태 */}
-        {posts.length === 0 && (
-          <p className="font-mono text-xs text-[var(--color-text-muted)]">아직 포스트가 없습니다.</p>
-        )}
+        <div>
+          <p className="font-mono text-[28px] font-bold leading-none tracking-tight text-white/90">
+            {value}
+          </p>
+          <p className="mt-1 font-mono text-[9px] tracking-[0.12em] text-zinc-600 uppercase">
+            {label}
+          </p>
+        </div>
       </div>
     </motion.div>
   );
 }
 
-// ── 메인 BentoGrid ───────────────────────────────────────
-interface BentoGridProps {
-  featured:  Post[];
-  dev:       Post[];
-  physics:   Post[];
-  math:      Post[];
-  life:      Post[];
+// ─────────────────────────────────────────────────────────────
+// CATEGORY CARD — col-span-1 기본 (wide=true 시 col-span-2)
+// ─────────────────────────────────────────────────────────────
+function CategoryCard({
+  cat, posts, wide = false,
+}: {
+  cat: PostCategory; posts: Post[]; wide?: boolean;
+}) {
+  const { Icon, label, accent, glow } = CAT[cat];
+  const items = posts.slice(0, wide ? 3 : 2);
+
+  return (
+    <motion.div variants={tileV} className={wide ? 'col-span-2' : 'col-span-1'}>
+      <div
+        className={`${CARD} h-full p-5`}
+        style={{ boxShadow: `inset 0 0 80px ${glow}` }}
+      >
+        {/* 좌측 accent 세로줄 */}
+        <div
+          aria-hidden
+          className="absolute left-0 top-5 h-6 w-[2px] rounded-r-full opacity-70"
+          style={{ background: accent }}
+        />
+
+        {/* 헤더 */}
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <div
+              className="flex h-5 w-5 items-center justify-center rounded-md"
+              style={{ background: `${accent}14`, color: accent }}
+            >
+              <Icon size={11} strokeWidth={2} />
+            </div>
+            <span className="text-[11px] font-medium tracking-tight text-zinc-400">{label}</span>
+          </div>
+          <Link
+            href={`/category/${cat}`}
+            className="flex items-center gap-px font-mono text-[9px] text-zinc-700 transition-colors hover:text-zinc-400"
+            onClick={(e) => e.stopPropagation()}
+          >
+            all <ArrowUpRight size={8} />
+          </Link>
+        </div>
+
+        {/* 구분선 */}
+        <div className="mb-3 h-px bg-white/[0.05]" />
+
+        {/* 포스트 목록 */}
+        <ul className="space-y-2.5">
+          {items.length > 0 ? items.map((post) => (
+            <li key={post.id}>
+              <Link href={`/posts/${post.slug}`} className="group/li flex flex-col gap-0.5">
+                <span className="line-clamp-1 text-[12px] font-medium leading-snug text-zinc-400 transition-colors group-hover/li:text-white">
+                  {post.title}
+                </span>
+                <div className="flex items-center gap-2">
+                  <time className="font-mono text-[9px] text-zinc-700">
+                    {fmtDate(post.createdAt, { month: 'short', day: 'numeric' })}
+                  </time>
+                  <span className="font-mono text-[9px] text-zinc-700">
+                    {post.readingTimeMin}m
+                  </span>
+                </div>
+              </Link>
+            </li>
+          )) : (
+            <li>
+              <p className="font-mono text-[10px] text-zinc-700">— 포스트가 없습니다</p>
+            </li>
+          )}
+        </ul>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// RECENT FEED CARD — col-span-2 (가로 3-열 미니 카드 그리드)
+// ─────────────────────────────────────────────────────────────
+function RecentCard({ posts }: { posts: Post[] }) {
+  const items = posts.slice(0, 3);
+
+  return (
+    <motion.div variants={tileV} className="col-span-2">
+      <div className={`${CARD} h-full p-5`}>
+        <div className="mb-3 flex items-center gap-1.5">
+          <BookOpen size={11} strokeWidth={2} className="text-zinc-600" />
+          <span className="font-mono text-[9px] tracking-[0.14em] text-zinc-600 uppercase">
+            Recent Posts
+          </span>
+        </div>
+        <div className="mb-3 h-px bg-white/[0.05]" />
+
+        <div className="grid grid-cols-3 gap-2.5">
+          {items.map((post) => {
+            const { accent } = CAT[post.category];
+            return (
+              <Link
+                key={post.id}
+                href={`/posts/${post.slug}`}
+                className="group/r flex flex-col gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 transition-all hover:border-white/[0.1] hover:bg-white/[0.04]"
+              >
+                <Badge cat={post.category} />
+                <p className="line-clamp-2 text-[11px] font-medium leading-snug text-zinc-400 transition-colors group-hover/r:text-white">
+                  {post.title}
+                </p>
+                <time className="mt-auto font-mono text-[9px] text-zinc-700">
+                  {fmtDate(post.createdAt, { month: 'short', day: 'numeric' })}
+                </time>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// BentoGrid — 4-col 복합 레이아웃
+//
+//  Row 1-2 │ Hero (2×2) │ Stat (1×1) │ Stat (1×1) │
+//           │            │ Dev  (1×1) │ Physics(1×1│
+//  Row 3   │ Recent(2×1)│ Math (1×1) │ Life  (1×1)│
+// ─────────────────────────────────────────────────────────────
+export interface BentoGridProps {
+  featured: Post[];
+  dev:      Post[];
+  physics:  Post[];
+  math:     Post[];
+  life:     Post[];
 }
 
 export function BentoGrid({ featured, dev, physics, math, life }: BentoGridProps) {
+  const totalPosts =
+    featured.length + dev.length + physics.length + math.length + life.length;
+
+  // 전체 최신순 정렬 (Recent 카드용)
+  const allPosts = [...dev, ...physics, ...math, ...life].sort(
+    (a, b) => b.createdAt - a.createdAt,
+  );
+
   return (
     <motion.div
-      className="bento-grid"
-      variants={containerVariants}
+      className="grid grid-cols-4 gap-3"
+      style={{ gridAutoRows: 'minmax(148px, auto)' }}
+      variants={gridV}
       initial="hidden"
-      animate="visible"
+      animate="show"
     >
-      {/* Row 1–2: Featured (2×2) × 2개 */}
-      {featured.map((post, i) => (
-        <FeaturedCard key={post.id} post={post} index={i} />
-      ))}
-
-      {/* Row 3: Dev (1×2), Physics (1×1), Math (1×1) */}
-      <CategoryCard category="dev"     posts={dev}     span={2} />
-      <CategoryCard category="physics" posts={physics} span={1} />
-      <CategoryCard category="math"    posts={math}    span={1} />
-
-      {/* Row 4: Life (1×1 × 4 — 또는 필요에 따라 조정) */}
-      {/* Life 카드는 전체 너비 사용 — 일상 기록은 가볍게 */}
-      <motion.div variants={cardVariants} className="col-span-4">
-        <div
-          className="glass glass-hover glow-life flex items-center gap-6 px-6 py-4"
-          style={{ background: 'linear-gradient(90deg, var(--glass-bg), rgba(255, 166, 87, 0.05))' }}
-        >
-          <span className="text-2xl">◎</span>
-          <div className="flex-1">
-            <span className="font-display text-sm font-bold uppercase tracking-wider text-[#ffa657]">Life</span>
-            {life[0] ? (
-              <p className="mt-0.5 text-sm text-[var(--color-text-secondary)]">
-                <Link href={`/posts/${life[0].slug}`} className="hover:text-[var(--color-accent)]">
-                  {life[0].title}
-                </Link>
-              </p>
-            ) : (
-              <p className="font-mono mt-0.5 text-xs text-[var(--color-text-muted)]">일상 기록이 여기에 나타납니다.</p>
-            )}
+      {/* ── Hero 2×2 */}
+      {featured[0] ? (
+        <HeroCard post={featured[0]} />
+      ) : (
+        <motion.div variants={tileV} className="col-span-2 row-span-2">
+          <div className={`${CARD} h-full items-center justify-center`}>
+            <p className="font-mono text-[10px] text-zinc-700">Featured post를 추가하세요</p>
           </div>
-          <Link
-            href="/category/life"
-            className="font-mono text-xs text-[var(--color-text-muted)] transition-colors hover:text-[#ffa657]"
-          >
-            all →
-          </Link>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
+
+      {/* ── Stats (우측 상단 Row 1) */}
+      <StatCard value={totalPosts} label="Total Posts" Icon={BookOpen}   accent="#60a5fa" />
+      <StatCard value={4}          label="Categories"  Icon={TrendingUp} accent="#a78bfa" />
+
+      {/* ── Dev, Physics (우측 하단 Row 2) */}
+      <CategoryCard cat="dev"     posts={dev}     />
+      <CategoryCard cat="physics" posts={physics} />
+
+      {/* ── Row 3: Recent (2×1), Math (1×1), Life (1×1) */}
+      <RecentCard posts={allPosts} />
+      <CategoryCard cat="math" posts={math} />
+      <CategoryCard cat="life" posts={life} />
     </motion.div>
   );
 }

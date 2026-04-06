@@ -1,17 +1,14 @@
-// ============================================================
-// src/app/page.tsx — Server Component (기본값)
-// Firestore 데이터를 서버에서 fetch → BentoGrid(Client)에 props 전달
-// ISR: revalidate 60초 (빌드 시 캐싱 + 점진적 갱신)
-// ============================================================
+// src/app/page.tsx — Server Component
+// ISR 60s | Firestore 병렬 fetch | props → BentoGrid(Client)
 
 import type { Metadata } from 'next';
 import { getAllCategoryPosts } from '@/lib/firebase';
 import { BentoGrid } from '@/components/BentoGrid';
 
-export const revalidate = 60; // ISR — 60초마다 재생성
+export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: 'Seowoo Jang — 장서우',
+  title: 'Seowoo Jang',
   description: '개발, 물리, 수학, 그리고 일상의 기록들.',
   openGraph: {
     title: 'Seowoo Jang',
@@ -24,77 +21,81 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  // 병렬 fetch — Promise.all 래핑됨 (firebase.ts 참고)
   const { featured, dev, physics, math, life } = await getAllCategoryPosts();
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
-      {/* ── 헤더 ────────────────────────────────────────── */}
-      <header className="mb-10">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="font-mono mb-1 text-xs tracking-widest text-[var(--color-accent)] uppercase">
-              jangseowoo.x1zz.com
-            </p>
-            <h1 className="font-display text-4xl font-bold tracking-tight text-[var(--color-text-primary)] sm:text-5xl">
-              장서우
-              <span className="ml-3 text-[var(--color-text-muted)]">/</span>
-              <span className="ml-3 text-[var(--color-accent)]">Seowoo</span>
-            </h1>
-            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-              개발 · 물리 · 수학 · 일상 — 생각이 코드가 되고, 코드가 기록이 된다.
-            </p>
+    // Jet Black 배경 — body보다 한 단계 더 어두운 느낌 유지
+    <div className="min-h-screen bg-[#050505]">
+      <div className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
+
+        {/* ── 헤더 — 텍스트만, 최대 미니멀 ──────────────────── */}
+        <header className="mb-11">
+          <div className="flex items-end justify-between">
+
+            {/* 좌: 이름 + 설명 */}
+            <div className="space-y-1.5">
+              <p className="font-mono text-[10px] tracking-[0.18em] text-zinc-600 uppercase">
+                jangseowoo.x1zz.com
+              </p>
+              <h1 className="text-[32px] font-semibold leading-none tracking-[-0.03em] text-white/90 sm:text-[38px]">
+                장서우
+                <span className="ml-2.5 text-zinc-600">/</span>
+                <span className="ml-2.5 text-zinc-400"> Seowoo Jang</span>
+              </h1>
+              <p className="text-[13px] text-zinc-600">
+                개발 · 물리 · 수학 · 일상 — 생각이 코드가 되고, 코드가 기록이 된다.
+              </p>
+            </div>
+
+            {/* 우: 상태 도트 (live 표시) */}
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-mono text-[10px] text-zinc-600">active</span>
+            </div>
           </div>
 
-          {/* 통계 뱃지 */}
-          <div className="hidden sm:flex items-center gap-4">
+          {/* 구분선 — accent는 왼쪽 아주 짧게만 */}
+          <div className="mt-8 flex h-px w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-full w-24 bg-gradient-to-r from-blue-500/40 to-transparent" />
+          </div>
+        </header>
+
+        {/* ── Bento Grid ───────────────────────────────────── */}
+        <BentoGrid
+          featured={featured}
+          dev={dev}
+          physics={physics}
+          math={math}
+          life={life}
+        />
+
+        {/* ── 푸터 — 텍스트만, 최대 미니멀 ──────────────────── */}
+        <footer className="mt-12 flex items-center justify-between">
+          <p className="font-mono text-[10px] text-zinc-700">
+            © {new Date().getFullYear()} Seowoo Jang
+          </p>
+          <nav className="flex items-center gap-5">
             {[
-              { label: 'Posts', value: featured.length + dev.length + physics.length + math.length + life.length },
-              { label: 'Categories', value: 4 },
-            ].map(({ label, value }) => (
-              <div key={label} className="glass px-4 py-2 text-center">
-                <div className="font-display text-xl font-bold text-[var(--color-accent)]">{value}</div>
-                <div className="font-mono text-xs text-[var(--color-text-muted)]">{label}</div>
-              </div>
+              { label: 'GitHub',   href: 'https://github.com/seowoo-jang' },
+              { label: 'x1zz.com', href: 'https://x1zz.com' },
+            ].map(({ label, href }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-[10px] text-zinc-700 transition-colors hover:text-zinc-400"
+              >
+                {label}
+              </a>
             ))}
-          </div>
-        </div>
+          </nav>
+        </footer>
 
-        {/* 구분선 */}
-        <div className="mt-8 h-px bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-border)] to-transparent opacity-30" />
-      </header>
-
-      {/* ── Bento Grid ──────────────────────────────────── */}
-      <BentoGrid
-        featured={featured}
-        dev={dev}
-        physics={physics}
-        math={math}
-        life={life}
-      />
-
-      {/* ── 푸터 ────────────────────────────────────────── */}
-      <footer className="mt-12 flex items-center justify-between">
-        <p className="font-mono text-xs text-[var(--color-text-muted)]">
-          © {new Date().getFullYear()} Seowoo Jang · jangseowoo.x1zz.com
-        </p>
-        <div className="flex items-center gap-4">
-          {[
-            { label: 'GitHub', href: 'https://github.com/yourusername' },
-            { label: 'x1zz.com', href: 'https://x1zz.com' },
-          ].map(({ label, href }) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-xs text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-accent)]"
-            >
-              {label}
-            </a>
-          ))}
-        </div>
-      </footer>
-    </main>
+      </div>
+    </div>
   );
 }
