@@ -1,26 +1,114 @@
+/* globals.css — Tailwind CSS v4 */
+
 @import "tailwindcss";
 
+/* ── 1. 디자인 토큰 (@theme) */
+@theme {
+  --color-void:        #000000;
+  --color-obsidian:    #0d1117;
+  --color-surface:     #161b22;
+  --color-elevated:    #1c2128;
+  --color-border:      #30363d;
+  --color-border-dim:  #21262d;
+
+  --color-text-primary:   #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-text-muted:     #484f58;
+
+  --color-accent:         #00e5ff;
+  --color-accent-dim:     #00b4cc;
+  --color-accent-ghost:   rgba(0, 229, 255, 0.08);
+  --color-accent-glow:    rgba(0, 229, 255, 0.25);
+
+  --color-cat-dev:        #7ee787;
+  --color-cat-physics:    #79c0ff;
+  --color-cat-math:       #d2a8ff;
+  --color-cat-life:       #ffa657;
+
+  --font-display: 'Syne', 'Noto Sans KR', sans-serif;
+  --font-body:    'DM Sans', 'Noto Sans KR', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  --spacing-bento-gap: 0.75rem;
+  --radius-bento: 1rem;
+  --ease-smooth: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ── 2. CSS 변수 (런타임) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --glass-bg:     rgba(22, 27, 34, 0.65);
+  --glass-border: rgba(48, 54, 61, 0.8);
+  --glass-blur:   16px;
+  --glow-accent:  0 0 24px rgba(0, 229, 255, 0.15), 0 0 48px rgba(0, 229, 255, 0.06);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* ── 3. Base Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background-color: var(--color-obsidian);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 229, 255, 0.04) 0%, transparent 60%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* ── 4. Glassmorphism 유틸리티 */
+@utility glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-bento);
+}
+
+/* glass-hover: 전환 효과 + hover 상태를 하나의 @utility 블록 안에 CSS 중첩으로 정의 */
+@utility glass-hover {
+  transition: background 0.25s var(--ease-smooth),
+              border-color 0.25s var(--ease-smooth),
+              box-shadow 0.25s var(--ease-smooth),
+              transform 0.25s var(--ease-smooth);
+  &:hover {
+    background: rgba(28, 33, 40, 0.8);
+    border-color: rgba(0, 229, 255, 0.25);
+    box-shadow: var(--glow-accent);
+    transform: translateY(-2px);
+  }
+}
+
+@utility glow-dev     { box-shadow: 0 0 20px rgba(126, 231, 135, 0.12); }
+@utility glow-physics { box-shadow: 0 0 20px rgba(121, 192, 255, 0.12); }
+@utility glow-math    { box-shadow: 0 0 20px rgba(210, 168, 255, 0.12); }
+@utility glow-life    { box-shadow: 0 0 20px rgba(255, 166, 87, 0.12); }
+
+/* ── 5. Bento Grid */
+@utility bento-grid {
+  display: grid;
+  gap: var(--spacing-bento-gap);
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* ── 6. 타이포그래피 */
+@utility font-display { font-family: var(--font-display); }
+@utility font-mono    { font-family: var(--font-mono); }
+
+/* ── 7. 스크롤바 */
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-obsidian); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-accent-dim); }
+
+/* ── 8. 포커스 */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
